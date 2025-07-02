@@ -1,3 +1,7 @@
+-- This Source Code Form is subject to the terms of the Mozilla Public License,
+-- v. 2.0. If a copy of the MPL was not distributed with this file, You can
+-- obtain one at https://mozilla.org/MPL/2.0/.
+--
 {- We use `head` for working with results from the parser, which are, by
  - the definition of the grammar, non-empty. -}
 {-# OPTIONS_GHC -Wno-x-partial #-}
