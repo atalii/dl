@@ -1,0 +1,12 @@
+This repository contains a toy Datalog implementation.
+
+Very many things are wrong with it:
+
+  • All predicates are unary.
+  • Naïve evaluation.
+  • Querying isn't supported; facts are simply generated when the Datalog
+    source file is loaded.
+  • Arithemetic is unimplemented.
+  • Usual logical connectives are unimplemented. This one's important.
+
+I may come back to and fix some of these things.
