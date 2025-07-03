@@ -31,7 +31,7 @@ type BoundVar = String
 
 type FreeVar = String
 
-data Variable = Bound BoundVar | Free FreeVar
+data Variable = Bound SourcePos BoundVar | Free SourcePos FreeVar
   deriving (Eq, Show)
 
 type Predicate = String
@@ -83,8 +83,9 @@ arrowParser :: Parser ()
 arrowParser = void $ string ":-" <|> string "<-"
 
 variableParser :: Parser Variable
-variableParser = Free <$> free <|> Bound <$> bound
+variableParser = getParserState >>= var . statePos
   where
+    var pos = Free pos <$> free <|> Bound pos <$> bound
     free = liftA2 (:) upper $ many letter
     bound = liftA2 (:) lower $ many letter
 

@@ -5,6 +5,7 @@
 
 module Main where
 
+import Control.Monad
 import Data.DL.Parser
 import Data.Either
 import Data.List
@@ -12,6 +13,7 @@ import Data.Maybe
 import System.Environment
 import System.Exit
 import System.IO
+import Text.Parsec.Pos
 import Util
 
 data Universe = Universe [GroundFact] [Rule]
@@ -24,20 +26,28 @@ type GroundFact = Sentence BoundVar
 data Rule = Implication Antecedent Consequent
   deriving (Eq, Show)
 
-data SubstitutionFailure = SubstitutionFailure
-  deriving (Show)
+data PosTagged a = Tag SourcePos a
 
-makeUniverse :: Document -> Either [String] Universe
+data EvalError = SubstitutionFailure FreeVar | InvalidFree FreeVar
+
+instance Show EvalError where
+  show (SubstitutionFailure name) = "no valid substitutions for unbound variable: " <> show name <> "."
+  show (InvalidFree name) = "free variable disallowed: " <> show name <> "."
+
+instance (Show a) => Show (PosTagged a) where
+  show (Tag pos a) = show pos <> ": " <> show a
+
+makeUniverse :: Document -> Either [PosTagged EvalError] Universe
 makeUniverse (Document clauses) = case split clauses of
   ([], facts, rules) -> Right $ Universe facts rules
   (errs, _, _) -> Left errs
   where
-    split :: [Clause] -> ([String], [GroundFact], [Rule])
+    split :: [Clause] -> ([PosTagged EvalError], [GroundFact], [Rule])
     split = collate . map interpret
 
     interpret (Simple (Fact sub predicate)) = case sub of
-      (Free var) -> Left $ "illegal free var: " <> var
-      (Bound var) -> Right $ Left $ Fact var predicate
+      (Free pos var) -> Left $ Tag pos $ InvalidFree var
+      (Bound _ var) -> Right $ Left $ Fact var predicate
     -- TODO: clean this up. GroundFacts should be part of the parser, and
     -- makeUniverse shouldn't then be fallible.
     interpret
@@ -53,17 +63,17 @@ makeUniverse (Document clauses) = case split clauses of
           (facts, rules) = partitionEithers sourceClauses
        in (errs, facts, rules)
 
-naive :: Universe -> Either [SubstitutionFailure] [GroundFact]
+naive :: Universe -> Either [PosTagged EvalError] [GroundFact]
 naive u = getFacts <$> findFixedPoint u
   where
     getFacts (Universe facts _) = facts
 
-findFixedPoint :: Universe -> Either [SubstitutionFailure] Universe
+findFixedPoint :: Universe -> Either [PosTagged EvalError] Universe
 findFixedPoint u = do
   u' <- infer u
   if u == u' then return u else findFixedPoint u'
 
-infer :: Universe -> Either [SubstitutionFailure] Universe
+infer :: Universe -> Either [PosTagged EvalError] Universe
 infer (Universe facts rules) = addFactsToUniverse <$> joinEithers (map apply rules)
   where
     addFactsToUniverse newFacts = Universe (nub $ facts ++ newFacts) rules
@@ -81,15 +91,15 @@ infer (Universe facts rules) = addFactsToUniverse <$> joinEithers (map apply rul
         if hPred /= antPred
           then return Nothing
           else case antSub of
-            Bound sub | sub == hSub -> Just <$> ground consequent []
-            Bound _ -> return Nothing
-            Free x -> Just <$> ground consequent [(x, hSub)]
+            Bound _ sub | sub == hSub -> Just <$> ground consequent []
+            Bound _ _ -> return Nothing
+            Free _ x -> Just <$> ground consequent [(x, hSub)]
 
-ground :: Consequent -> [(FreeVar, BoundVar)] -> Either SubstitutionFailure GroundFact
-ground (Fact (Bound var) predicate) _ = Right $ Fact var predicate
-ground (Fact (Free var) predicate) subs = case [bound | (free, bound) <- subs, free == var] of
+ground :: Consequent -> [(FreeVar, BoundVar)] -> Either (PosTagged EvalError) GroundFact
+ground (Fact (Bound _ var) predicate) _ = Right $ Fact var predicate
+ground (Fact (Free pos var) predicate) subs = case [bound | (free, bound) <- subs, free == var] of
   [bound] -> Right $ Fact bound predicate
-  _ -> Left SubstitutionFailure
+  _ -> Left $ Tag pos $ SubstitutionFailure var
 
 bail :: (Show a) => Int -> a -> IO b
 bail code msg = getProgName >>= hPutStrLn stderr . (<> ": " <> show msg) >> exitWith (ExitFailure code)
@@ -107,10 +117,13 @@ readDocument =
 main :: IO ()
 main =
   readDocument
-    >>= handleLeft (bail 3 . concat) . makeUniverse
-    >>= handleLeft (bail 4) . naive
+    >>= handleLeft (logErrs >=> bail 3) . makeUniverse
+    >>= handleLeft (logErrs >=> bail 4) . naive
     >>= print
   where
     handleLeft :: (a -> IO b) -> Either a b -> IO b
     handleLeft f (Left a) = f a
     handleLeft _ (Right b) = return b
+
+    logErrs :: (Show a) => [a] -> IO String
+    logErrs vars = mapM_ (hPrint stderr) vars >> return "fatal error"
