@@ -12,6 +12,7 @@ import Data.Maybe
 import System.Environment
 import System.Exit
 import System.IO
+import Util
 
 data Universe = Universe [GroundFact] [Rule]
   deriving (Eq, Show)
@@ -29,6 +30,9 @@ type RuleConsequent = Sentence Variable
 
 data Rule = Implication RuleAntecedent RuleConsequent
   deriving (Eq, Show)
+
+data SubstitutionFailure = SubstitutionFailure
+  deriving (Show)
 
 makeUniverse :: Document -> Either [String] Universe
 makeUniverse (Document clauses) = case split clauses of
@@ -57,23 +61,25 @@ makeUniverse (Document clauses) = case split clauses of
           (facts, rules) = partitionEithers sourceClauses
        in (errs, facts, rules)
 
-naive :: Universe -> [GroundFact]
-naive u = let (Universe facts _) = findFixedPoint u in facts
-
-findFixedPoint :: Universe -> Universe
-findFixedPoint u =
-  let u' = infer u
-   in if u == u' then u else findFixedPoint u'
-
-infer :: Universe -> Universe
-infer (Universe facts rules) =
-  let newFacts = concatMap apply rules
-   in Universe (nub $ facts ++ newFacts) rules
+naive :: Universe -> Either [SubstitutionFailure] [GroundFact]
+naive u = getFacts <$> findFixedPoint u
   where
-    apply :: Rule -> [GroundFact]
-    apply rule = mapMaybe (apply' rule) facts
+    getFacts (Universe facts _) = facts
 
-    apply' :: Rule -> GroundFact -> Maybe GroundFact
+findFixedPoint :: Universe -> Either [SubstitutionFailure] Universe
+findFixedPoint u = do
+  u' <- infer u
+  if u == u' then return u else findFixedPoint u'
+
+infer :: Universe -> Either [SubstitutionFailure] Universe
+infer (Universe facts rules) = addFactsToUniverse <$> joinEithers (map apply rules)
+  where
+    addFactsToUniverse newFacts = Universe (nub $ facts ++ newFacts) rules
+
+    apply rule = case partitionEithers $ map (apply' rule) facts of
+      ([], mgf) -> Right $ catMaybes mgf
+      (failures, _) -> Left failures
+
     apply'
       ( Implication
           (Sentence antSub antPred)
@@ -81,17 +87,17 @@ infer (Universe facts rules) =
         )
       (Sentence hSub hPred) =
         if hPred /= antPred
-          then Nothing
+          then return Nothing
           else case antSub of
-            Bound sub | sub == hSub -> Just $ ground consequent []
-            Bound _ -> Nothing
-            Free x -> Just $ ground consequent [(x, hSub)]
+            Bound sub | sub == hSub -> Just <$> ground consequent []
+            Bound _ -> return Nothing
+            Free x -> Just <$> ground consequent [(x, hSub)]
 
-ground :: RuleConsequent -> [(FreeVar, BoundVar)] -> GroundFact
-ground (Sentence (Bound var) predicate) _ = Sentence var predicate
+ground :: RuleConsequent -> [(FreeVar, BoundVar)] -> Either SubstitutionFailure GroundFact
+ground (Sentence (Bound var) predicate) _ = Right $ Sentence var predicate
 ground (Sentence (Free var) predicate) subs = case [bound | (free, bound) <- subs, free == var] of
-  [bound] -> Sentence bound predicate
-  _ -> error "lol"
+  [bound] -> Right $ Sentence bound predicate
+  _ -> Left SubstitutionFailure
 
 bail :: (Show a) => Int -> a -> IO b
 bail code msg = getProgName >>= hPutStrLn stderr . (<> ": " <> show msg) >> exitWith (ExitFailure code)
@@ -107,7 +113,12 @@ readDocument =
     handleParseFailure (Right doc) = return doc
 
 main :: IO ()
-main = readDocument >>= eval . makeUniverse
+main =
+  readDocument
+    >>= handleLeft (bail 3 . concat) . makeUniverse
+    >>= handleLeft (bail 4) . naive
+    >>= print
   where
-    eval (Left errs) = bail 3 $ concat errs -- LOL
-    eval (Right universe) = print $ naive universe
+    handleLeft :: (a -> IO b) -> Either a b -> IO b
+    handleLeft f (Left a) = f a
+    handleLeft _ (Right b) = return b
