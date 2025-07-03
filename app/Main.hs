@@ -2,13 +2,9 @@
 -- v. 2.0. If a copy of the MPL was not distributed with this file, You can
 -- obtain one at https://mozilla.org/MPL/2.0/.
 --
-{- We use `head` for working with results from the parser, which are, by
- - the definition of the grammar, non-empty. -}
-{-# OPTIONS_GHC -Wno-x-partial #-}
 
 module Main where
 
-import Data.Char
 import Data.DL.Parser
 import Data.Either
 import Data.List
@@ -20,13 +16,6 @@ import System.IO
 data Universe = Universe [GroundFact] [Rule]
   deriving (Eq, Show)
 
-data Var = Bound BoundVar | Free FreeVar
-  deriving (Eq, Show)
-
-type BoundVar = String
-
-type FreeVar = String
-
 type Predicate = String
 
 data Sentence v = Sentence v Predicate
@@ -34,9 +23,9 @@ data Sentence v = Sentence v Predicate
 
 type GroundFact = Sentence BoundVar
 
-type RuleAntecedent = Sentence Var
+type RuleAntecedent = Sentence Variable
 
-type RuleConsequent = Sentence Var
+type RuleConsequent = Sentence Variable
 
 data Rule = Implication RuleAntecedent RuleConsequent
   deriving (Eq, Show)
@@ -46,12 +35,12 @@ makeUniverse (Document clauses) = case split clauses of
   ([], facts, rules) -> Right $ Universe facts rules
   (errs, _, _) -> Left errs
   where
+    split :: [Clause] -> ([String], [GroundFact], [Rule])
     split = collate . map interpret
 
-    interpret (Simple (Fact sub predicate)) =
-      if isUpper (head sub)
-        then Left $ "illegal free var: " <> sub
-        else Right $ Left $ Sentence sub predicate
+    interpret (Simple (Fact sub predicate)) = case sub of
+      (Free var) -> Left $ "illegal free var: " <> var
+      (Bound var) -> Right $ Left $ Sentence var predicate
     interpret
       ( Rule
           (Fact consSub consPred)
@@ -60,8 +49,8 @@ makeUniverse (Document clauses) = case split clauses of
         Right $
           Right $
             Implication
-              (Sentence (makeVar antSub) antPred)
-              (Sentence (makeVar consSub) consPred)
+              (Sentence antSub antPred)
+              (Sentence consSub consPred)
 
     collate vals =
       let (errs, sourceClauses) = partitionEithers vals
@@ -103,9 +92,6 @@ ground (Sentence (Bound var) predicate) _ = Sentence var predicate
 ground (Sentence (Free var) predicate) subs = case [bound | (free, bound) <- subs, free == var] of
   [bound] -> Sentence bound predicate
   _ -> error "lol"
-
-makeVar :: String -> Var
-makeVar s = if isUpper (head s) then Free s else Bound s
 
 bail :: (Show a) => Int -> a -> IO b
 bail code msg = getProgName >>= hPutStrLn stderr . (<> ": " <> show msg) >> exitWith (ExitFailure code)
