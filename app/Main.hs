@@ -98,7 +98,7 @@ main :: IO ()
 main =
   readDocument
     >>= handleLeft (logErrs >=> bail 3) . naive . makeUniverse
-    >>= print
+    >>= putStrLn . unlines . map show
   where
     handleLeft :: (a -> IO b) -> Either a b -> IO b
     handleLeft f (Left a) = f a

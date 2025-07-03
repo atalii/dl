@@ -60,8 +60,7 @@ type Fact = Sentence Variable
 type GroundFact = Sentence BoundVar
 
 instance (Show v) => Show (Sentence v) where
-  show (Fact subject predicate) =
-    "Fact: " <> show subject <> " is-a " <> predicate
+  show (Fact subject predicate) = predicate <> "(" <> show subject <> ")."
 
 instance (Eq a) => Eq (PosTagged a) where
   (==) (Tag _ a) (Tag _ b) = a == b
