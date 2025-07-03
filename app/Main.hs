@@ -42,11 +42,11 @@ data Rule = Implication RuleAntecedent RuleConsequent
   deriving (Eq, Show)
 
 makeUniverse :: Document -> Either [String] Universe
-makeUniverse (Document clauses) = case partition clauses of
+makeUniverse (Document clauses) = case split clauses of
   ([], facts, rules) -> Right $ Universe facts rules
   (errs, _, _) -> Left errs
   where
-    partition = collate . map interpret
+    split = collate . map interpret
 
     interpret (Simple (Fact sub predicate)) =
       if isUpper (head sub)
