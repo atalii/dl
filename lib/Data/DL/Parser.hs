@@ -12,9 +12,11 @@ module Data.DL.Parser
     Fact,
     Variable (..),
     Sentence (..),
+    GroundFact,
     Predicate,
-    BoundVar,
-    FreeVar,
+    BoundVar (..),
+    FreeVar (..),
+    PosTagged (..),
     runDocumentParser,
   )
 where
@@ -24,14 +26,16 @@ import Data.Char
 import Text.Parsec
 import Text.Parsec.Text
 
+data PosTagged a = Tag SourcePos a
+
 newtype Document = Document [Clause]
   deriving (Show)
 
-type BoundVar = String
+type BoundVar = PosTagged String
 
-type FreeVar = String
+type FreeVar = PosTagged String
 
-data Variable = Bound SourcePos BoundVar | Free SourcePos FreeVar
+data Variable = Bound BoundVar | Free FreeVar
   deriving (Eq, Show)
 
 type Predicate = String
@@ -53,9 +57,17 @@ deriving instance (Eq v) => Eq (Sentence v)
 
 type Fact = Sentence Variable
 
+type GroundFact = Sentence BoundVar
+
 instance (Show v) => Show (Sentence v) where
   show (Fact subject predicate) =
     "Fact: " <> show subject <> " is-a " <> predicate
+
+instance (Eq a) => Eq (PosTagged a) where
+  (==) (Tag _ a) (Tag _ b) = a == b
+
+instance (Show a) => Show (PosTagged a) where
+  show (Tag pos a) = show pos <> ": " <> show a
 
 documentParser :: Parser Document
 documentParser = fmap Document $ many (clauseParser <* spaces) <* spaces
@@ -85,7 +97,10 @@ arrowParser = void $ string ":-" <|> string "<-"
 variableParser :: Parser Variable
 variableParser = getParserState >>= var . statePos
   where
-    var pos = Free pos <$> free <|> Bound pos <$> bound
+    var pos =
+      Free . Tag pos <$> free
+        <|> Bound . Tag pos <$> bound
+
     free = liftA2 (:) upper $ many letter
     bound = liftA2 (:) lower $ many letter
 

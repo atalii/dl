@@ -13,29 +13,19 @@ import Data.Maybe
 import System.Environment
 import System.Exit
 import System.IO
-import Text.Parsec.Pos
 import Util
 
 data Universe = Universe [GroundFact] [Rule]
   deriving (Eq, Show)
 
--- A GroundFact functions like a parser's fact, but requires that every
--- variable be bound.
-type GroundFact = Sentence BoundVar
-
 data Rule = Implication Antecedent Consequent
   deriving (Eq, Show)
-
-data PosTagged a = Tag SourcePos a
 
 data EvalError = SubstitutionFailure FreeVar | InvalidFree FreeVar
 
 instance Show EvalError where
-  show (SubstitutionFailure name) = "no valid substitutions for unbound variable: " <> show name <> "."
-  show (InvalidFree name) = "free variable disallowed: " <> show name <> "."
-
-instance (Show a) => Show (PosTagged a) where
-  show (Tag pos a) = show pos <> ": " <> show a
+  show (SubstitutionFailure (Tag _ name)) = "no valid substitutions for unbound variable: " <> show name <> "."
+  show (InvalidFree (Tag _ name)) = "free variable disallowed: " <> show name <> "."
 
 makeUniverse :: Document -> Either [PosTagged EvalError] Universe
 makeUniverse (Document clauses) = case split clauses of
@@ -46,8 +36,8 @@ makeUniverse (Document clauses) = case split clauses of
     split = collate . map interpret
 
     interpret (Simple (Fact sub predicate)) = case sub of
-      (Free pos var) -> Left $ Tag pos $ InvalidFree var
-      (Bound _ var) -> Right $ Left $ Fact var predicate
+      (Free var@(Tag pos _)) -> Left $ Tag pos $ InvalidFree var
+      (Bound var) -> Right $ Left $ Fact var predicate
     -- TODO: clean this up. GroundFacts should be part of the parser, and
     -- makeUniverse shouldn't then be fallible.
     interpret
@@ -87,17 +77,17 @@ infer (Universe facts rules) = addFactsToUniverse <$> joinEithers (map apply rul
           (Fact antSub antPred)
           consequent
         )
-      (Fact hSub hPred) =
+      (Fact hSub@(Tag _ hName) hPred) =
         if hPred /= antPred
           then return Nothing
           else case antSub of
-            Bound _ sub | sub == hSub -> Just <$> ground consequent []
-            Bound _ _ -> return Nothing
-            Free _ x -> Just <$> ground consequent [(x, hSub)]
+            Bound (Tag _ sub) | sub == hName -> Just <$> ground consequent []
+            Bound _ -> return Nothing
+            Free x -> Just <$> ground consequent [(x, hSub)]
 
 ground :: Consequent -> [(FreeVar, BoundVar)] -> Either (PosTagged EvalError) GroundFact
-ground (Fact (Bound _ var) predicate) _ = Right $ Fact var predicate
-ground (Fact (Free pos var) predicate) subs = case [bound | (free, bound) <- subs, free == var] of
+ground (Fact (Bound var) predicate) _ = Right $ Fact var predicate
+ground (Fact (Free var@(Tag pos _)) predicate) subs = case [bound | (free, bound) <- subs, free == var] of
   [bound] -> Right $ Fact bound predicate
   _ -> Left $ Tag pos $ SubstitutionFailure var
 
