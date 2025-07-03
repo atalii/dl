@@ -1,3 +1,5 @@
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE StandaloneDeriving #-}
 -- This Source Code Form is subject to the terms of the Mozilla Public License,
 -- v. 2.0. If a copy of the MPL was not distributed with this file, You can
 -- obtain one at https://mozilla.org/MPL/2.0/.
@@ -9,8 +11,10 @@ module Data.DL.Parser
   ( Antecedent (..),
     Clause (..),
     Document (..),
-    Fact (..),
+    Fact,
     Variable (..),
+    Sentence (..),
+    Predicate,
     BoundVar,
     FreeVar,
     runDocumentParser,
@@ -40,9 +44,17 @@ data Clause = Simple Fact | Rule Fact Antecedent
 newtype Antecedent = Antecedent Fact
   deriving (Show)
 
-data Fact = Fact Variable Predicate
+--  Store a predicate on a variable of some kind. Evaluation can discriminate
+--  between sentences on bounded variables, sentences on free variables, or, as
+--  the parser, work on 'facts,' i.e., sentences of any kind of variable.
+data Sentence v where
+  Fact :: (Eq v) => v -> Predicate -> Sentence v
 
-instance Show Fact where
+deriving instance (Eq v) => Eq (Sentence v)
+
+type Fact = Sentence Variable
+
+instance (Show v) => Show (Sentence v) where
   show (Fact subject predicate) =
     "Fact: " <> show subject <> " is-a " <> predicate
 

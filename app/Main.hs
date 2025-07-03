@@ -17,16 +17,13 @@ import Util
 data Universe = Universe [GroundFact] [Rule]
   deriving (Eq, Show)
 
-type Predicate = String
-
-data Sentence v = Sentence v Predicate
-  deriving (Eq, Show)
-
+-- A GroundFact functions like a parser's fact, but requires that every
+-- variable be bound.
 type GroundFact = Sentence BoundVar
 
-type RuleAntecedent = Sentence Variable
+type RuleAntecedent = Fact
 
-type RuleConsequent = Sentence Variable
+type RuleConsequent = Fact
 
 data Rule = Implication RuleAntecedent RuleConsequent
   deriving (Eq, Show)
@@ -44,7 +41,7 @@ makeUniverse (Document clauses) = case split clauses of
 
     interpret (Simple (Fact sub predicate)) = case sub of
       (Free var) -> Left $ "illegal free var: " <> var
-      (Bound var) -> Right $ Left $ Sentence var predicate
+      (Bound var) -> Right $ Left $ Fact var predicate
     interpret
       ( Rule
           (Fact consSub consPred)
@@ -53,8 +50,8 @@ makeUniverse (Document clauses) = case split clauses of
         Right $
           Right $
             Implication
-              (Sentence antSub antPred)
-              (Sentence consSub consPred)
+              (Fact antSub antPred)
+              (Fact consSub consPred)
 
     collate vals =
       let (errs, sourceClauses) = partitionEithers vals
@@ -82,10 +79,10 @@ infer (Universe facts rules) = addFactsToUniverse <$> joinEithers (map apply rul
 
     apply'
       ( Implication
-          (Sentence antSub antPred)
+          (Fact antSub antPred)
           consequent
         )
-      (Sentence hSub hPred) =
+      (Fact hSub hPred) =
         if hPred /= antPred
           then return Nothing
           else case antSub of
@@ -94,9 +91,9 @@ infer (Universe facts rules) = addFactsToUniverse <$> joinEithers (map apply rul
             Free x -> Just <$> ground consequent [(x, hSub)]
 
 ground :: RuleConsequent -> [(FreeVar, BoundVar)] -> Either SubstitutionFailure GroundFact
-ground (Sentence (Bound var) predicate) _ = Right $ Sentence var predicate
-ground (Sentence (Free var) predicate) subs = case [bound | (free, bound) <- subs, free == var] of
-  [bound] -> Right $ Sentence bound predicate
+ground (Fact (Bound var) predicate) _ = Right $ Fact var predicate
+ground (Fact (Free var) predicate) subs = case [bound | (free, bound) <- subs, free == var] of
+  [bound] -> Right $ Fact bound predicate
   _ -> Left SubstitutionFailure
 
 bail :: (Show a) => Int -> a -> IO b
