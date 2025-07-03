@@ -8,7 +8,8 @@
 {-# OPTIONS_GHC -Wno-x-partial #-}
 
 module Data.DL.Parser
-  ( Antecedent (..),
+  ( Antecedent,
+    Consequent,
     Clause (..),
     Document (..),
     Fact,
@@ -38,11 +39,12 @@ data Variable = Bound BoundVar | Free FreeVar
 
 type Predicate = String
 
-data Clause = Simple Fact | Rule Fact Antecedent
+data Clause = Simple Fact | Rule Consequent Antecedent
   deriving (Show)
 
-newtype Antecedent = Antecedent Fact
-  deriving (Show)
+type Consequent = Fact
+
+type Antecedent = Fact
 
 --  Store a predicate on a variable of some kind. Evaluation can discriminate
 --  between sentences on bounded variables, sentences on free variables, or, as
@@ -70,7 +72,7 @@ ruleParser = do
   spaces
   arrowParser
   spaces
-  Rule fact . Antecedent <$> factParser <* char '.'
+  Rule fact <$> factParser <* char '.'
 
 factParser :: Parser Fact
 factParser = do

@@ -21,11 +21,7 @@ data Universe = Universe [GroundFact] [Rule]
 -- variable be bound.
 type GroundFact = Sentence BoundVar
 
-type RuleAntecedent = Fact
-
-type RuleConsequent = Fact
-
-data Rule = Implication RuleAntecedent RuleConsequent
+data Rule = Implication Antecedent Consequent
   deriving (Eq, Show)
 
 data SubstitutionFailure = SubstitutionFailure
@@ -43,10 +39,7 @@ makeUniverse (Document clauses) = case split clauses of
       (Free var) -> Left $ "illegal free var: " <> var
       (Bound var) -> Right $ Left $ Fact var predicate
     interpret
-      ( Rule
-          (Fact consSub consPred)
-          (Antecedent (Fact antSub antPred))
-        ) =
+      (Rule (Fact consSub consPred) (Fact antSub antPred)) =
         Right $
           Right $
             Implication
@@ -90,7 +83,7 @@ infer (Universe facts rules) = addFactsToUniverse <$> joinEithers (map apply rul
             Bound _ -> return Nothing
             Free x -> Just <$> ground consequent [(x, hSub)]
 
-ground :: RuleConsequent -> [(FreeVar, BoundVar)] -> Either SubstitutionFailure GroundFact
+ground :: Consequent -> [(FreeVar, BoundVar)] -> Either SubstitutionFailure GroundFact
 ground (Fact (Bound var) predicate) _ = Right $ Fact var predicate
 ground (Fact (Free var) predicate) subs = case [bound | (free, bound) <- subs, free == var] of
   [bound] -> Right $ Fact bound predicate
