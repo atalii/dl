@@ -27,31 +27,22 @@ instance Show EvalError where
   show (SubstitutionFailure (Tag _ name)) = "no valid substitutions for unbound variable: " <> show name <> "."
   show (InvalidFree (Tag _ name)) = "free variable disallowed: " <> show name <> "."
 
-makeUniverse :: Document -> Either [PosTagged EvalError] Universe
-makeUniverse (Document clauses) = case split clauses of
-  ([], facts, rules) -> Right $ Universe facts rules
-  (errs, _, _) -> Left errs
+makeUniverse :: Document -> Universe
+makeUniverse (Document clauses) =
+  let (facts, rules) = split
+   in Universe facts rules
   where
-    split :: [Clause] -> ([PosTagged EvalError], [GroundFact], [Rule])
-    split = collate . map interpret
+    split :: ([GroundFact], [Rule])
+    split = partitionEithers $ map interpret clauses
 
-    interpret (Simple (Fact sub predicate)) = case sub of
-      (Free var@(Tag pos _)) -> Left $ Tag pos $ InvalidFree var
-      (Bound var) -> Right $ Left $ Fact var predicate
-    -- TODO: clean this up. GroundFacts should be part of the parser, and
-    -- makeUniverse shouldn't then be fallible.
+    interpret :: Clause -> Either GroundFact Rule
+    interpret (Simple fact) = Left fact
     interpret
       (Rule (Fact consSub consPred) (Fact antSub antPred)) =
         Right $
-          Right $
-            Implication
-              (Fact antSub antPred)
-              (Fact consSub consPred)
-
-    collate vals =
-      let (errs, sourceClauses) = partitionEithers vals
-          (facts, rules) = partitionEithers sourceClauses
-       in (errs, facts, rules)
+          Implication
+            (Fact antSub antPred)
+            (Fact consSub consPred)
 
 naive :: Universe -> Either [PosTagged EvalError] [GroundFact]
 naive u = getFacts <$> findFixedPoint u
@@ -107,8 +98,7 @@ readDocument =
 main :: IO ()
 main =
   readDocument
-    >>= handleLeft (logErrs >=> bail 3) . makeUniverse
-    >>= handleLeft (logErrs >=> bail 4) . naive
+    >>= handleLeft (logErrs >=> bail 3) . naive . makeUniverse
     >>= print
   where
     handleLeft :: (a -> IO b) -> Either a b -> IO b

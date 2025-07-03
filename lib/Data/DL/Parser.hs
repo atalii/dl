@@ -40,7 +40,7 @@ data Variable = Bound BoundVar | Free FreeVar
 
 type Predicate = String
 
-data Clause = Simple Fact | Rule Consequent Antecedent
+data Clause = Simple GroundFact | Rule Consequent Antecedent
   deriving (Show)
 
 type Consequent = Fact
@@ -73,7 +73,7 @@ documentParser :: Parser Document
 documentParser = fmap Document $ many (clauseParser <* spaces) <* spaces
 
 clauseParser :: Parser Clause
-clauseParser = try ruleParser <|> fmap Simple (factParser <* char '.')
+clauseParser = try ruleParser <|> fmap Simple groundFactParser
 
 ruleParser :: Parser Clause
 ruleParser = do
@@ -91,6 +91,19 @@ factParser = do
   _ <- char ')'
   return $ Fact subject predicate
 
+groundFactParser :: Parser GroundFact
+groundFactParser = do
+  predicate <- many1 letter
+  _ <- char '('
+
+  state <- getParserState
+  let pos = statePos state
+
+  subject <- boundParser
+  _ <- char ')'
+  _ <- char '.'
+  return $ Fact (Tag pos subject) predicate
+
 arrowParser :: Parser ()
 arrowParser = void $ string ":-" <|> string "<-"
 
@@ -98,11 +111,12 @@ variableParser :: Parser Variable
 variableParser = getParserState >>= var . statePos
   where
     var pos =
-      Free . Tag pos <$> free
-        <|> Bound . Tag pos <$> bound
+      Free . Tag pos <$> freeParser
+        <|> Bound . Tag pos <$> boundParser
 
-    free = liftA2 (:) upper $ many letter
-    bound = liftA2 (:) lower $ many letter
+freeParser = liftA2 (:) upper $ many letter
+
+boundParser = liftA2 (:) lower $ many letter
 
 runDocumentParser :: FilePath -> IO (Either ParseError Document)
 runDocumentParser = parseFromFile documentParser
