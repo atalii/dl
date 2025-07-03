@@ -1,11 +1,9 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE StandaloneDeriving #-}
+
 -- This Source Code Form is subject to the terms of the Mozilla Public License,
 -- v. 2.0. If a copy of the MPL was not distributed with this file, You can
 -- obtain one at https://mozilla.org/MPL/2.0/.
-{- We use `head` for working with results from the parser, which are, by
- - the definition of the grammar, non-empty. -}
-{-# OPTIONS_GHC -Wno-x-partial #-}
 
 module Data.DL.Parser
   ( Antecedent,
@@ -78,15 +76,18 @@ factParser :: Parser Fact
 factParser = do
   predicate <- many1 letter
   _ <- char '('
-  subject <- many1 letter
+  subject <- variableParser
   _ <- char ')'
-  return $ Fact (makeVariable subject) predicate
+  return $ Fact subject predicate
 
 arrowParser :: Parser ()
 arrowParser = void $ string ":-" <|> string "<-"
 
+variableParser :: Parser Variable
+variableParser = Free <$> free <|> Bound <$> bound
+  where
+    free = liftA2 (:) upper $ many letter
+    bound = liftA2 (:) lower $ many letter
+
 runDocumentParser :: FilePath -> IO (Either ParseError Document)
 runDocumentParser = parseFromFile documentParser
-
-makeVariable :: String -> Variable
-makeVariable s = if isUpper (head s) then Free s else Bound s
