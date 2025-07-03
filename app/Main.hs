@@ -21,11 +21,10 @@ data Universe = Universe [GroundFact] [Rule]
 data Rule = Implication Antecedent Consequent
   deriving (Eq, Show)
 
-data EvalError = SubstitutionFailure FreeVar | InvalidFree FreeVar
+newtype EvalError = SubstitutionFailure FreeVar
 
 instance Show EvalError where
   show (SubstitutionFailure (Tag _ name)) = "no valid substitutions for unbound variable: " <> show name <> "."
-  show (InvalidFree (Tag _ name)) = "free variable disallowed: " <> show name <> "."
 
 makeUniverse :: Document -> Universe
 makeUniverse (Document clauses) =
