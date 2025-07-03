@@ -83,7 +83,7 @@ factParser = do
   return $ Fact (makeVariable subject) predicate
 
 arrowParser :: Parser ()
-arrowParser = void $ string ":-"
+arrowParser = void $ string ":-" <|> string "<-"
 
 runDocumentParser :: FilePath -> IO (Either ParseError Document)
 runDocumentParser = parseFromFile documentParser

@@ -38,6 +38,8 @@ makeUniverse (Document clauses) = case split clauses of
     interpret (Simple (Fact sub predicate)) = case sub of
       (Free var) -> Left $ "illegal free var: " <> var
       (Bound var) -> Right $ Left $ Fact var predicate
+    -- TODO: clean this up. GroundFacts should be part of the parser, and
+    -- makeUniverse shouldn't then be fallible.
     interpret
       (Rule (Fact consSub consPred) (Fact antSub antPred)) =
         Right $
