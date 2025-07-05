@@ -9,6 +9,7 @@ import Control.Monad
 import Data.DL.Parser
 import Data.Either
 import Data.List
+import Data.List.Extra
 import Data.Maybe
 import System.Environment
 import System.Exit
@@ -18,19 +19,22 @@ import Util
 data Universe = Universe [GroundFact] [Rule]
   deriving (Eq, Show)
 
+instance Semigroup Universe where
+  (<>) (Universe lf lr) (Universe rf rr) = Universe (lf ++ rf) (lr ++ rr)
+
+instance Monoid Universe where
+  mempty = Universe [] []
+
 newtype EvalError = SubstitutionFailure FreeVar
 
 instance Show EvalError where
   show (SubstitutionFailure (Tag _ name)) = "no valid substitutions for unbound variable: " <> show name <> "."
 
 makeUniverse :: Document -> Universe
-makeUniverse (Document clauses) =
-  let (facts, rules) = foldr split ([], []) clauses
-   in Universe facts rules
+makeUniverse (Document clauses) = mconcatMap toUniverse clauses
   where
-    split :: Clause -> ([GroundFact], [Rule]) -> ([GroundFact], [Rule])
-    split (Simple fact) (facts, rules) = (fact : facts, rules)
-    split (Rule rule) (facts, rules) = (facts, rule : rules)
+    toUniverse (Simple fact) = Universe [fact] []
+    toUniverse (Rule rule) = Universe [] [rule]
 
 naive :: Universe -> Either [PosTagged EvalError] [GroundFact]
 naive u = getFacts <$> findFixedPoint u
