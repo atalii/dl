@@ -18,9 +18,6 @@ import Util
 data Universe = Universe [GroundFact] [Rule]
   deriving (Eq, Show)
 
-data Rule = Implication Antecedent Consequent
-  deriving (Eq, Show)
-
 newtype EvalError = SubstitutionFailure FreeVar
 
 instance Show EvalError where
@@ -28,20 +25,12 @@ instance Show EvalError where
 
 makeUniverse :: Document -> Universe
 makeUniverse (Document clauses) =
-  let (facts, rules) = split
+  let (facts, rules) = foldr split ([], []) clauses
    in Universe facts rules
   where
-    split :: ([GroundFact], [Rule])
-    split = partitionEithers $ map interpret clauses
-
-    interpret :: Clause -> Either GroundFact Rule
-    interpret (Simple fact) = Left fact
-    interpret
-      (Rule (Fact consSub consPred) (Fact antSub antPred)) =
-        Right $
-          Implication
-            (Fact antSub antPred)
-            (Fact consSub consPred)
+    split :: Clause -> ([GroundFact], [Rule]) -> ([GroundFact], [Rule])
+    split (Simple fact) (facts, rules) = (fact : facts, rules)
+    split (Rule rule) (facts, rules) = (facts, rule : rules)
 
 naive :: Universe -> Either [PosTagged EvalError] [GroundFact]
 naive u = getFacts <$> findFixedPoint u

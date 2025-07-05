@@ -10,6 +10,7 @@ module Data.DL.Parser
     Clause (..),
     Document (..),
     Fact,
+    Rule (..),
     Variable (..),
     Sentence (..),
     GroundFact,
@@ -40,7 +41,10 @@ data Variable = Bound BoundVar | Free FreeVar
 
 type Predicate = String
 
-data Clause = Simple GroundFact | Rule Consequent Antecedent
+data Rule = Implication Consequent Antecedent
+  deriving (Eq, Show)
+
+data Clause = Simple GroundFact | Rule Rule
   deriving (Show)
 
 type Consequent = Fact
@@ -76,11 +80,13 @@ clauseParser = try ruleParser <|> fmap Simple groundFactParser
 
 ruleParser :: Parser Clause
 ruleParser = do
-  fact <- factParser
+  consequent <- factParser
   spaces
   arrowParser
   spaces
-  Rule fact <$> factParser <* char '.'
+  antecedent <- factParser
+  _ <- char '.'
+  return $ Rule $ Implication antecedent consequent
 
 factParser :: Parser Fact
 factParser = do
