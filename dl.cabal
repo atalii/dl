@@ -19,15 +19,19 @@ common warnings
 executable dl
     import:           warnings
     main-is:          Main.hs
-    other-modules:    Util
     -- other-extensions:
-    build-depends:    base ^>=4.19.2.0, extra ^>= 1.7, parsec ^>= 3.1, dl
+    build-depends:    base ^>=4.19.2.0, parsec ^>= 3.1, dl
     hs-source-dirs:   app
     default-language: Haskell2010
 
 library
-    exposed-modules: Data.DL.Parser
+    exposed-modules:
+      Data.DL.Parser,
+      Data.DL.Universe,
+      Data.DL.Evaluation,
+      Data.DL.Evaluation.Naive
+    other-modules: Data.DL.Util
 
-    build-depends:    base ^>=4.19.2.0, parsec ^>= 3.1
+    build-depends:    base ^>=4.19.2.0, extra ^>= 1.7, parsec ^>= 3.1
     hs-source-dirs: lib
     default-language: Haskell2010
