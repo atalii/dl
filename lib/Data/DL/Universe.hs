@@ -2,7 +2,12 @@
 -- v. 2.0. If a copy of the MPL was not distributed with this file, You can
 -- obtain one at https://mozilla.org/MPL/2.0/.
 
-module Data.DL.Universe (Universe (..), makeUniverse) where
+module Data.DL.Universe
+  ( Universe (..),
+    makeUniverse,
+    getFacts,
+  )
+where
 
 import Data.DL.Parser
 import Data.List.Extra
@@ -11,17 +16,20 @@ import Data.List.Extra
 -- logical settings) is a set of facts and rules that continuously evolve as
 -- inferences are made. Whereas a Document is a product of parsing, a Universe
 -- is a product of deduction.
-data Universe = Universe [GroundFact] [Rule]
+data Universe = Universe [GroundFact] [Rule] [BoundVar]
   deriving (Eq, Show)
 
 instance Semigroup Universe where
-  (<>) (Universe lf lr) (Universe rf rr) = Universe (lf ++ rf) (lr ++ rr)
+  (<>) (Universe lf lr lv) (Universe rf rr rv) =
+    Universe (lf ++ rf) (lr ++ rr) (lv ++ rv)
 
 instance Monoid Universe where
-  mempty = Universe [] []
+  mempty = Universe [] [] []
 
 makeUniverse :: Document -> Universe
 makeUniverse (Document clauses) = mconcatMap toUniverse clauses
   where
-    toUniverse (Simple fact) = Universe [fact] []
-    toUniverse (Rule rule) = Universe [] [rule]
+    toUniverse (Simple fact@(Fact var _)) = Universe [fact] [] [var]
+    toUniverse (Rule rule) = Universe [] [rule] []
+
+getFacts (Universe facts _ _) = facts

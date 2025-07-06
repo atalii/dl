@@ -9,13 +9,20 @@ import Data.DL.Parser
 import Data.DL.Universe
 import Data.DL.Util
 import Data.Either
+import Data.Either.Extra
 import Data.List
 import Data.Maybe
 
+type GroundAntecedent = GroundFact
+
+type GroundConsequent = GroundFact
+
+data GroundRule = GroundRule GroundAntecedent GroundConsequent
+
+-- | Run the naive evaluation strategy by repeatedly making as many inferences
+-- as possible until we reach a fixed point.
 naive :: Universe -> Either [PosTagged EvalError] [GroundFact]
 naive u = getFacts <$> findFixedPoint u
-  where
-    getFacts (Universe facts _) = facts
 
 findFixedPoint :: Universe -> Either [PosTagged EvalError] Universe
 findFixedPoint u = do
@@ -23,29 +30,28 @@ findFixedPoint u = do
   if u == u' then return u else findFixedPoint u'
 
 infer :: Universe -> Either [PosTagged EvalError] Universe
-infer (Universe facts rules) = addFactsToUniverse <$> joinEithers (map apply rules)
+infer (Universe facts rules vars) =
+  addFactsToUniverse <$> joinEithers (map (mapLeft singleton . apply) rules)
   where
-    addFactsToUniverse newFacts = Universe (nub $ facts ++ newFacts) rules
+    addFactsToUniverse newFacts = Universe (nub $ facts ++ newFacts) rules vars
 
-    apply rule = case partitionEithers $ map (apply' rule) facts of
-      ([], mgf) -> Right $ catMaybes mgf
-      (failures, _) -> Left failures
+    apply :: Rule -> Either (PosTagged EvalError) [GroundFact]
+    apply rule = mapMaybe affirm <$> bindVarsIn rule
 
-    apply'
+    bindVarsIn :: Rule -> Either (PosTagged EvalError) [GroundRule]
+    bindVarsIn
       ( Implication
-          (Fact antSub antPred)
-          consequent
-        )
-      (Fact hSub@(Tag _ hName) hPred) =
-        if hPred /= antPred
-          then return Nothing
-          else case antSub of
-            Bound (Tag _ sub) | sub == hName -> Just <$> ground consequent []
-            Bound _ -> return Nothing
-            Free x -> Just <$> ground consequent [(x, hSub)]
+          (Fact (Free aSub) aPred)
+          (Fact (Free cSub@(Tag errTag _)) cPred)
+        ) =
+        if cSub == aSub
+          then
+            Right $
+              map
+                (\bound -> GroundRule (Fact bound aPred) (Fact bound cPred))
+                vars
+          else Left $ Tag errTag $ SubstitutionFailure cSub
+    bindVarsIn (Implication (Fact (Free aSub) _) _) = Right []
 
-ground :: Consequent -> [(FreeVar, BoundVar)] -> Either (PosTagged EvalError) GroundFact
-ground (Fact (Bound var) predicate) _ = Right $ Fact var predicate
-ground (Fact (Free var@(Tag pos _)) predicate) subs = case [bound | (free, bound) <- subs, free == var] of
-  [bound] -> Right $ Fact bound predicate
-  _ -> Left $ Tag pos $ SubstitutionFailure var
+    affirm (GroundRule antecedent consequent) =
+      if antecedent `elem` facts then Just consequent else Nothing
