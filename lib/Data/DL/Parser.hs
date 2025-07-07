@@ -10,6 +10,7 @@ module Data.DL.Parser
     Clause (..),
     Document (..),
     Fact,
+    Claim (..),
     Rule (..),
     Variable (..),
     Sentence (..),
@@ -41,30 +42,34 @@ data Variable = Bound BoundVar | Free FreeVar
 
 type Predicate = String
 
-data Rule = Implication Consequent Antecedent
+data Rule = Implication Antecedent Consequent
   deriving (Eq, Show)
 
 data Clause = Simple GroundFact | Rule Rule
   deriving (Show)
 
-type Consequent = Fact
+type Consequent = Claim Variable
 
 type Antecedent = Fact
 
---  Store a predicate on a variable of some kind. Evaluation can discriminate
---  between sentences on bounded variables, sentences on free variables, or, as
---  the parser, work on 'facts,' i.e., sentences of any kind of variable.
 data Sentence v where
-  Fact :: (Eq v) => v -> Predicate -> Sentence v
+  Fact :: (Eq v) => Claim v -> Sentence v
+  Conjunct :: (Eq v) => Sentence v -> Sentence v -> Sentence v
+
+data Claim v = Claim Predicate v
+  deriving (Eq)
 
 deriving instance (Eq v) => Eq (Sentence v)
 
 type Fact = Sentence Variable
 
-type GroundFact = Sentence BoundVar
+type GroundFact = Claim BoundVar
 
 instance (Show v) => Show (Sentence v) where
-  show (Fact subject predicate) = predicate <> "(" <> show subject <> ")."
+  show (Fact c) = show c
+
+instance (Show v) => Show (Claim v) where
+  show (Claim pred v) = show pred ++ "(" ++ show v ++ ")."
 
 instance (Eq a) => Eq (PosTagged a) where
   (==) (Tag _ a) (Tag _ b) = a == b
@@ -80,21 +85,35 @@ clauseParser = try ruleParser <|> fmap Simple groundFactParser
 
 ruleParser :: Parser Clause
 ruleParser = do
-  consequent <- factParser
+  consequent <- claimParser
   spaces
   arrowParser
   spaces
-  antecedent <- factParser
-  _ <- char '.'
+  antecedent <- factParser True
   return $ Rule $ Implication antecedent consequent
 
-factParser :: Parser Fact
-factParser = do
+claimParser :: Parser (Claim Variable)
+claimParser = do
   predicate <- many1 letter
   _ <- char '('
   subject <- variableParser
   _ <- char ')'
-  return $ Fact subject predicate
+  return $ Claim predicate subject
+
+factParser :: Bool -> Parser Fact
+factParser terminal = do
+  (Fact <$> try (claimParser <* conditionalPeriod)) <|> conjunctParser
+  where
+    conditionalPeriod = when terminal $ void (char '.')
+
+conjunctParser :: Parser Fact
+conjunctParser = do
+  lhs <- factParser False
+  spaces
+  conjunctionSignParser
+  spaces
+  rhs <- factParser True
+  return $ Conjunct lhs rhs
 
 groundFactParser :: Parser GroundFact
 groundFactParser = do
@@ -107,10 +126,13 @@ groundFactParser = do
   subject <- boundParser
   _ <- char ')'
   _ <- char '.'
-  return $ Fact (Tag pos subject) predicate
+  return $ Claim predicate (Tag pos subject)
 
 arrowParser :: Parser ()
 arrowParser = void $ string ":-" <|> string "<-"
+
+conjunctionSignParser :: Parser ()
+conjunctionSignParser = void $ string "/\\" <|> string "∧" <|> string ","
 
 variableParser :: Parser Variable
 variableParser = getParserState >>= var . statePos

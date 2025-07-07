@@ -13,7 +13,7 @@ import Data.Either.Extra
 import Data.List
 import Data.Maybe
 
-type GroundAntecedent = GroundFact
+type GroundAntecedent = Sentence BoundVar
 
 type GroundConsequent = GroundFact
 
@@ -36,22 +36,42 @@ infer (Universe facts rules vars) =
     addFactsToUniverse newFacts = Universe (nub $ facts ++ newFacts) rules vars
 
     apply :: Rule -> Either (PosTagged EvalError) [GroundFact]
-    apply rule = mapMaybe affirm <$> bindVarsIn rule
+    apply rule = concatMap decomposeFacts . mapMaybe affirm <$> bindVarsIn rule
 
     bindVarsIn :: Rule -> Either (PosTagged EvalError) [GroundRule]
-    bindVarsIn
-      ( Implication
-          (Fact (Free aSub) aPred)
-          (Fact (Free cSub@(Tag errTag _)) cPred)
-        ) =
-        if cSub == aSub
-          then
-            Right $
-              map
-                (\bound -> GroundRule (Fact bound aPred) (Fact bound cPred))
-                vars
-          else Left $ Tag errTag $ SubstitutionFailure cSub
-    bindVarsIn (Implication (Fact (Free aSub) _) _) = Right []
+    bindVarsIn rule = catMaybes <$> mapM (substitute rule) vars
 
-    affirm (GroundRule antecedent consequent) =
+    substitute :: Rule -> BoundVar -> Either (PosTagged EvalError) (Maybe GroundRule)
+    substitute
+      ( Implication
+          (Fact (Claim aPred (Free aSub)))
+          (Claim cPred (Free cSub))
+        )
+      targetBound
+        | cSub == aSub =
+            return $
+              Just $
+                GroundRule
+                  (Fact $ Claim aPred targetBound)
+                  (Claim cPred targetBound)
+    substitute
+      (Implication (Fact _) (Claim _ (Free var@(Tag tag _))))
+      _ = Left $ Tag tag $ SubstitutionFailure var
+    substitute
+      (Implication (Conjunct lhs rhs) consequent@(Claim cPred _))
+      var = do
+        lhs' <- substitute (Implication lhs consequent) var
+        rhs' <- substitute (Implication rhs consequent) var
+        return $ case (lhs', rhs') of
+          (Just (GroundRule lhs'' _), Just (GroundRule rhs'' _)) ->
+            Just $ GroundRule (Conjunct lhs'' rhs'') (Claim cPred var)
+          _ -> Nothing
+    substitute _ _ = return Nothing
+
+    affirm (GroundRule (Fact antecedent) consequent) =
       if antecedent `elem` facts then Just consequent else Nothing
+    affirm (GroundRule (Conjunct lhs rhs) consequent) =
+      affirm (GroundRule lhs consequent) <* affirm (GroundRule rhs consequent)
+
+    decomposeFacts :: GroundConsequent -> [GroundFact]
+    decomposeFacts claim = [claim]
