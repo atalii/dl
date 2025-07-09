@@ -29,7 +29,7 @@ instance Monoid Universe where
 makeUniverse :: Document -> Universe
 makeUniverse (Document clauses) = mconcatMap toUniverse clauses
   where
-    toUniverse (Simple fact@(Claim _ subject)) = Universe [fact] [] [subject]
+    toUniverse (Simple fact@(Claim _ subjects)) = Universe [fact] [] subjects
     toUniverse (Rule rule) = Universe [] [rule] []
 
 getFacts (Universe facts _ _) = facts

@@ -56,7 +56,7 @@ data Sentence v where
   Fact :: (Eq v) => Claim v -> Sentence v
   Conjunct :: (Eq v) => Sentence v -> Sentence v -> Sentence v
 
-data Claim v = Claim Predicate v
+data Claim v = Claim Predicate [v]
   deriving (Eq)
 
 deriving instance (Eq v) => Eq (Sentence v)
@@ -96,9 +96,9 @@ claimParser :: Parser (Claim Variable)
 claimParser = do
   predicate <- many1 letter
   _ <- char '('
-  subject <- variableParser
+  subjects <- sepBy1 variableParser (char ',' >> spaces)
   _ <- char ')'
-  return $ Claim predicate subject
+  return $ Claim predicate subjects
 
 factParser :: Bool -> Parser Fact
 factParser terminal = do
@@ -123,10 +123,10 @@ groundFactParser = do
   state <- getParserState
   let pos = statePos state
 
-  subject <- boundParser
+  subjects <- sepBy1 boundParser (char ',' >> spaces)
   _ <- char ')'
   _ <- char '.'
-  return $ Claim predicate (Tag pos subject)
+  return $ Claim predicate $ map (Tag pos) subjects
 
 arrowParser :: Parser ()
 arrowParser = void $ string ":-" <|> string "<-"

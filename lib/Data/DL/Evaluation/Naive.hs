@@ -4,6 +4,7 @@
 
 module Data.DL.Evaluation.Naive (naive) where
 
+import Control.Monad
 import Data.DL.Evaluation
 import Data.DL.Evaluation.Util
 import Data.DL.Parser
@@ -13,10 +14,6 @@ import Data.Either
 import Data.Either.Extra
 import Data.List
 import Data.Maybe
-
-type GroundConsequent = GroundFact
-
-data GroundRule = GroundRule GroundAntecedent GroundConsequent
 
 -- | Run the naive evaluation strategy by repeatedly making as many inferences
 -- as possible until we reach a fixed point.
@@ -29,10 +26,10 @@ findFixedPoint u = do
   if u == u' then return u else findFixedPoint u'
 
 infer :: Universe -> Either [EvalError] Universe
-infer (Universe facts rules vars) =
+infer (Universe facts rules bounds) =
   addFactsToUniverse <$> joinEithers (map (mapLeft singleton . apply) rules)
   where
-    addFactsToUniverse newFacts = Universe (nub $ facts ++ newFacts) rules vars
+    addFactsToUniverse newFacts = Universe (nub $ facts ++ newFacts) rules bounds
 
     apply :: Rule -> Either EvalError [GroundFact]
     apply rule =
@@ -41,21 +38,10 @@ infer (Universe facts rules vars) =
        in concatMap decomposeFacts <$> affirmedConsequents
 
     bindVarsIn :: Rule -> Either EvalError [GroundRule]
-    bindVarsIn rule = catMaybes <$> mapM (substitute rule) vars
-
-    -- Substitute a bound variable for what is assumed to be the one whole free variable in the rule.
-    substitute :: Rule -> BoundVar -> Either EvalError (Maybe GroundRule)
-    substitute
-      (Implication antecedent (Claim cPred (Free cSub)))
-      targetBound = do
-        antecedent' <- bind antecedent [(cSub, targetBound)]
-        return $
-          Just $
-            GroundRule
-              antecedent'
-              (Claim cPred targetBound)
-    substitute (Implication _ (Claim _ (Bound _))) _ =
-      error "lol idk what the correct behavior is here"
+    bindVarsIn rule =
+      let frees = gatherFrees rule
+          substitutionTables = map (zip frees) $ replicateM (length frees) bounds
+       in mapM (bindRule rule) substitutionTables
 
     affirm (GroundRule (Fact antecedent) consequent) =
       if antecedent `elem` facts then Just consequent else Nothing
