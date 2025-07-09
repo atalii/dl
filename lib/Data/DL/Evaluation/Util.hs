@@ -9,14 +9,23 @@ import Data.DL.Parser
 
 type GroundAntecedent = Sentence BoundVar
 
--- | Run the given fact through the given substitutions.
 bind :: Fact -> [(FreeVar, BoundVar)] -> Either EvalError GroundAntecedent
-bind (Fact (Claim pred (Free subject))) subs = case lookup subject subs of
-  Nothing -> Left $ SubstitutionFailure subject
-  Just bound -> return $ Fact $ Claim pred bound
-bind (Fact (Claim pred (Bound subject))) subs = return $ Fact $ Claim pred subject
--- \^ TODO: I don't know if this should fail.
-bind (Conjunct lhs rhs) subs = do
-  lhs' <- bind lhs subs
-  rhs' <- bind rhs subs
+bind f s = reduce $ runSubstitutions f s
+
+-- | Reduce to ground, failing on any free variables.
+reduce :: Fact -> Either EvalError GroundAntecedent
+reduce (Fact (Claim pred (Free subject))) = Left $ SubstitutionFailure subject
+reduce (Fact (Claim pred (Bound subject))) = Right $ Fact $ Claim pred subject
+reduce (Conjunct lhs rhs) = do
+  lhs' <- reduce lhs
+  rhs' <- reduce rhs
   return $ Conjunct lhs' rhs'
+
+-- | Run the given fact through the given substitutions.
+runSubstitutions :: Fact -> [(FreeVar, BoundVar)] -> Fact
+runSubstitutions (Fact (Claim pred (Free subject))) subs = case lookup subject subs of
+  Nothing -> Fact $ Claim pred (Free subject)
+  Just bound -> Fact $ Claim pred (Bound bound)
+runSubstitutions (Fact (Claim pred (Bound subject))) subs = Fact $ Claim pred $ Bound subject
+-- \^ TODO: I don't know if this should fail.
+runSubstitutions (Conjunct lhs rhs) subs = Conjunct (runSubstitutions lhs subs) (runSubstitutions rhs subs)
