@@ -4,6 +4,7 @@
 
 module Data.DL.Util (joinEithers) where
 
+-- | Gather a list of Eithers, short circuiting on the first encountered Left.
 joinEithers :: [Either [a] [b]] -> Either [a] [b]
 joinEithers [] = return []
 joinEithers ((Right x) : xs) = (++ x) <$> joinEithers xs

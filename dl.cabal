@@ -30,7 +30,9 @@ library
       Data.DL.Universe,
       Data.DL.Evaluation,
       Data.DL.Evaluation.Naive
-    other-modules: Data.DL.Util
+    other-modules:
+      Data.DL.Util,
+      Data.DL.Evaluation.Util,
 
     build-depends:    base ^>=4.19.2.0, extra ^>= 1.7, parsec ^>= 3.1
     hs-source-dirs: lib
