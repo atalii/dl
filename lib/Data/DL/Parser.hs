@@ -1,8 +1,9 @@
 -- This Source Code Form is subject to the terms of the Mozilla Public License,
 -- v. 2.0. If a copy of the MPL was not distributed with this file, You can
 -- obtain one at https://mozilla.org/MPL/2.0/.
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE StandaloneDeriving #-}
 
 module Data.DL.Parser
   ( Antecedent,
@@ -52,18 +53,22 @@ type Consequent = Claim Variable
 
 type Antecedent = Fact
 
-data Sentence v where
-  Fact :: (Eq v) => Claim v -> Sentence v
-  Conjunct :: (Eq v) => Sentence v -> Sentence v -> Sentence v
+data Sentence v = Fact (Claim v) | Conjunct (Sentence v) (Sentence v)
+  deriving (Eq, Functor, Foldable)
 
 data Claim v = Claim Predicate [v]
-  deriving (Eq)
-
-deriving instance (Eq v) => Eq (Sentence v)
+  deriving (Eq, Functor, Foldable)
 
 type Fact = Sentence Variable
 
 type GroundFact = Claim BoundVar
+
+instance Traversable Sentence where
+  traverse f (Fact claim) = Fact <$> traverse f claim
+  traverse f (Conjunct lhs rhs) = (Conjunct <$> traverse f lhs) <*> traverse f rhs
+
+instance Traversable Claim where
+  traverse f (Claim pred v) = Claim pred <$> traverse f v
 
 instance (Show v) => Show (Sentence v) where
   show (Fact c) = show c

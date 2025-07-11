@@ -49,28 +49,18 @@ bindRule (Implication a c) subs = do
       )
 
 bind :: Fact -> [(FreeVar, BoundVar)] -> Either EvalError GroundAntecedent
-bind f s = reduce $ runSubstitutions f s
+bind f s = reduce $ runSubstitutions s f
 
 -- | Reduce to ground, failing on any free variables.
 reduce :: Fact -> Either EvalError GroundAntecedent
-reduce (Fact (Claim pred subjects)) = Fact . Claim pred <$> mapM failOnFree subjects
-  where
-    failOnFree :: Variable -> Either EvalError BoundVar
-    failOnFree (Free v) = Left $ SubstitutionFailure v
-    failOnFree (Bound v) = Right v
-reduce (Conjunct lhs rhs) = do
-  lhs' <- reduce lhs
-  rhs' <- reduce rhs
-  return $ Conjunct lhs' rhs'
+reduce = traverse $ \case
+  (Free v) -> Left $ SubstitutionFailure v
+  (Bound v) -> Right v
 
 -- | Run the given fact through the given substitutions.
-runSubstitutions :: Fact -> [(FreeVar, BoundVar)] -> Fact
-runSubstitutions (Conjunct lhs rhs) subs = Conjunct (runSubstitutions lhs subs) (runSubstitutions rhs subs)
-runSubstitutions (Fact (Claim pred subjects)) subs = Fact $ Claim pred (runSubstitutions' subjects)
+runSubstitutions :: [(FreeVar, BoundVar)] -> Fact -> Fact
+runSubstitutions subs = fmap substituteVar
   where
-    runSubstitutions' :: [Variable] -> [Variable]
-    runSubstitutions' = map substituteVar
-
     substituteVar (Bound var) = Bound var
     substituteVar (Free var) = case lookup var subs of
       Just b -> Bound b
