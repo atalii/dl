@@ -40,13 +40,9 @@ bindRule :: Rule -> [(FreeVar, BoundVar)] -> Either EvalError GroundRule
 bindRule (Implication a c) subs = do
   a' <- bind a subs
   c' <- bind (Fact c) subs
-  return $
-    GroundRule
-      a'
-      ( case c' of
-          (Fact claim) -> claim
-          _ -> error "bind is broken"
-      )
+  return $ GroundRule a' $ case c' of
+    (Fact claim) -> claim
+    _ -> error "bind is broken"
 
 bind :: Fact -> [(FreeVar, BoundVar)] -> Either EvalError GroundAntecedent
 bind f s = reduce $ runSubstitutions s f
