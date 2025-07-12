@@ -83,7 +83,21 @@ instance (Show a) => Show (PosTagged a) where
   show (Tag pos a) = show pos <> ": " <> show a
 
 documentParser :: Parser Document
-documentParser = fmap Document $ many (clauseParser <* spaces) <* spaces
+documentParser = fmap Document $ many item <* spaces
+  where
+    item = comment >> clauseParser <* spaces
+
+-- | Accept comments surrounding a given parser.
+possiblyCommented :: Parser a -> Parser a
+possiblyCommented p = spaces >> comment >> p <* spaces <* comment <* spaces
+
+comment :: Parser ()
+comment = void $ many $ (void (try line) <|> try inline) >> spaces
+  where
+    line = string "//" >> many (satisfy (/= '\n'))
+    inline =
+      void $
+        string "/*" >> manyTill (inline <|> void anyChar) (try (string "*/"))
 
 clauseParser :: Parser Clause
 clauseParser = try ruleParser <|> fmap Simple groundFactParser
@@ -100,8 +114,9 @@ ruleParser = do
 claimParser :: Parser (Claim Variable)
 claimParser = do
   predicate <- many1 letter
-  _ <- char '('
-  subjects <- sepBy1 variableParser (char ',' >> spaces)
+  _ <- char '(' >> comment >> spaces
+  subjects <-
+    sepBy1 (possiblyCommented variableParser) (possiblyCommented $ char ',')
   _ <- char ')'
   return $ Claim predicate subjects
 
@@ -128,7 +143,9 @@ groundFactParser = do
   state <- getParserState
   let pos = statePos state
 
-  subjects <- sepBy1 boundParser (char ',' >> spaces)
+  subjects <-
+    sepBy1 (possiblyCommented boundParser) (possiblyCommented $ char ',')
+
   _ <- char ')'
   _ <- char '.'
   return $ Claim predicate $ map (Tag pos) subjects

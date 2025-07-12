@@ -1,5 +1,8 @@
-mortal(X) <- man(X).
+// All men are mortal and socrates is a man. Datalog will tell us that
+// Socrates is mortal.
+mortal(X /* A capital indicates a free variable. */) <- man(X).
 man(socrates).
 
-corruptedTheYouth("socrates").
+// We allow ∧ as a substitute for the usual comma to indicate conjunction.
 killedByHemlock(X) <- mortal(X) ∧ corruptedTheYouth(X).
+corruptedTheYouth("socrates" /* This is equivalent to `socrates`. */).
