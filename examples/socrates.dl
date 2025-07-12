@@ -1,5 +1,5 @@
 mortal(X) <- man(X).
 man(socrates).
 
-corruptedTheYouth(socrates).
+corruptedTheYouth("socrates").
 killedByHemlock(X) <- mortal(X) ∧ corruptedTheYouth(X).

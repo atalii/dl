@@ -148,7 +148,13 @@ variableParser = getParserState >>= var . statePos
 
 freeParser = liftA2 (:) upper $ many letter
 
-boundParser = liftA2 (:) lower $ many letter
+boundParser = stringLiteral <|> liftA2 (:) lower (many letter)
+
+stringLiteral :: Parser String
+stringLiteral = between (char '"') (char '"') $ many charOrEsc
+  where
+    charOrEsc = try esc <|> satisfy (/= '"')
+    esc = char '\\' >> anyChar
 
 runDocumentParser :: FilePath -> IO (Either ParseError Document)
 runDocumentParser = parseFromFile documentParser
