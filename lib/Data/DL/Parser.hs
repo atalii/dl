@@ -16,7 +16,7 @@ module Data.DL.Parser
     Variable (..),
     Sentence (..),
     GroundFact,
-    Predicate,
+    Predicate (..),
     BoundVar (..),
     FreeVar (..),
     PosTagged (..),
@@ -26,6 +26,7 @@ where
 
 import Control.Monad
 import Data.Char
+import Data.List
 import Text.Parsec
 import Text.Parsec.Text
 
@@ -41,7 +42,8 @@ type FreeVar = PosTagged String
 data Variable = Bound BoundVar | Free FreeVar
   deriving (Eq, Show)
 
-type Predicate = String
+data Predicate = Equality | Literal String
+  deriving (Eq)
 
 data Rule = Implication Antecedent Consequent
   deriving (Eq, Show)
@@ -74,7 +76,8 @@ instance (Show v) => Show (Sentence v) where
   show (Fact c) = show c
 
 instance (Show v) => Show (Claim v) where
-  show (Claim pred v) = show pred ++ "(" ++ show v ++ ")."
+  show (Claim (Literal pred) v) = show pred ++ "(" ++ show v ++ ")."
+  show (Claim Equality vs) = mconcat $ intersperse " = " $ map show vs
 
 instance (Eq a) => Eq (PosTagged a) where
   (==) (Tag _ a) (Tag _ b) = a == b
@@ -112,13 +115,21 @@ ruleParser = do
   return $ Rule $ Implication antecedent consequent
 
 claimParser :: Parser (Claim Variable)
-claimParser = do
-  predicate <- many1 letter
-  _ <- char '(' >> comment >> spaces
-  subjects <-
-    sepBy1 (possiblyCommented variableParser) (possiblyCommented $ char ',')
-  _ <- char ')'
-  return $ Claim predicate subjects
+claimParser = try literalParser <|> equalityParser
+  where
+    literalParser = do
+      predicate <- many1 letter
+      _ <- possiblyCommented $ char '('
+      subjects <-
+        sepBy1 (possiblyCommented variableParser) (possiblyCommented $ char ',')
+      _ <- possiblyCommented $ char ')'
+      return $ Claim (Literal predicate) subjects
+
+    equalityParser = do
+      lhs <- possiblyCommented variableParser
+      _ <- possiblyCommented $ char '='
+      rhs <- possiblyCommented variableParser
+      return $ Claim Equality [lhs, rhs]
 
 factParser :: Bool -> Parser Fact
 factParser terminal = do
@@ -148,7 +159,7 @@ groundFactParser = do
 
   _ <- char ')'
   _ <- char '.'
-  return $ Claim predicate $ map (Tag pos) subjects
+  return $ Claim (Literal predicate) $ map (Tag pos) subjects
 
 arrowParser :: Parser ()
 arrowParser = void $ string ":-" <|> string "<-"
