@@ -86,7 +86,7 @@ instance (Show a) => Show (PosTagged a) where
   show (Tag pos a) = show pos <> ": " <> show a
 
 documentParser :: Parser Document
-documentParser = fmap Document $ many item <* spaces
+documentParser = Document <$> many item
   where
     item = comment >> clauseParser <* spaces
 
