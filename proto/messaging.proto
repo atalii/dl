@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package datalog;
+
+message Query {
+  message Syn { string version = 1; }
+  message Load { string path = 1; }
+
+  oneof content {
+    Syn syn = 1;
+    // Load load = 2;
+  }
+}
+
+message Response {
+  message SynAck { string version = 1; }
+  // message Load { int dbId = 1; }
+
+  oneof content {
+    SynAck synack = 1;
+    // Load load = 2;
+  }
+}

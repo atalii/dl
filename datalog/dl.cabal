@@ -9,19 +9,44 @@ author:             Tali Auster
 maintainer:         me@tali.network
 -- copyright:
 category:           Development
-build-type:         Simple
 extra-doc-files:    CHANGELOG.md
--- extra-source-files:
+
+build-type: Custom
+extra-source-files: ../proto/messaging.proto
+
+custom-setup
+  setup-depends: base, Cabal, proto-lens-setup
 
 common warnings
     ghc-options: -Wall
 
-executable dl
+executable dld
+    import:           warnings
+    main-is:          Main.hs
+    build-depends:
+      base ^>=4.19.2.0,
+      parsec ^>= 3.1,
+      network,
+      proto-lens-runtime,
+      proto-lens,
+      lens,
+      bytestring,
+      dl
+    other-modules:
+      Proto.Messaging,
+      Proto.Messaging_Fields,
+      NetworkUtils,
+      ProtoUtils,
+    autogen-modules: Proto.Messaging, Proto.Messaging_Fields
+    hs-source-dirs:   exe-dld
+    default-language: Haskell2010
+
+executable dl-load
     import:           warnings
     main-is:          Main.hs
     -- other-extensions:
     build-depends:    base ^>=4.19.2.0, parsec ^>= 3.1, dl
-    hs-source-dirs:   app
+    hs-source-dirs:   exe-dl-load
     default-language: Haskell2010
 
 library
